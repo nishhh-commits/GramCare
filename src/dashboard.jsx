@@ -9,10 +9,24 @@ import {
   deleteDoc,
   doc
 } from "firebase/firestore";
+import { Bar } from "react-chartjs-2";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend
+} from "chart.js";
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
+
 import { signOut } from "firebase/auth";
 import { db, auth } from "./firebase/config";
 import { useAuth } from "./context/AuthContext";
 import { useNavigate, Link} from "react-router-dom";
+
+
 
 function Dashboard() {
   const { currentUser } = useAuth();
@@ -94,9 +108,35 @@ function Dashboard() {
     <div>
       <h1>Gram Care Dashboard</h1>
       <Link to="/search">Go to Global Search</Link>
+      <Link to="/requests">Go to Requests</Link>
       <button onClick={handleLogout}>Logout</button>
 
       <h2>Stats</h2>
+      <h2>Stock Levels</h2>
+{medicines.length > 0 && (
+  <div style={{ maxWidth: "600px" }}>
+    <Bar
+      data={{
+        labels: medicines.map((m) => m.medicineName),
+        datasets: [
+          {
+            label: "Quantity",
+            data: medicines.map((m) => m.quantity),
+            backgroundColor: medicines.map((m) =>
+              m.quantity <= m.lowStockThreshold ? "red" : "green"
+            )
+          }
+        ]
+      }}
+      options={{
+        responsive: true,
+        plugins: {
+          legend: { display: false }
+        }
+      }}
+    />
+  </div>
+)}
       <p>Total medicines: {medicines.length}</p>
       <p>Low stock items: {lowStockCount}</p>
 
