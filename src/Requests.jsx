@@ -7,7 +7,8 @@ import {
   updateDoc,
   doc,
   addDoc,
-  getDoc
+  getDoc,
+  getDocs
 } from "firebase/firestore";
 import { db } from "./firebase/config";
 import { useAuth } from "./context/AuthContext";
@@ -62,6 +63,25 @@ function Requests() {
   }
 
   async function handleApprove(request) {
+    const invQuery = query(
+  collection(db, "inventory"),
+  where("centerId", "==", request.fulfillingCenterId),
+  where("medicineName", "==", request.medicineName)
+);
+
+const invSnapshot = await getDocs(invQuery);
+
+if (invSnapshot.empty) {
+  alert("Medicine not found in inventory!");
+  return;
+}
+
+const stock = invSnapshot.docs[0].data().quantity;
+
+if (request.quantityRequested > stock) {
+  alert("Not enough stock available!");
+  return;
+}
   const deliveryRef = await addDoc(collection(db, "deliveries"), {
     requestId: request.id,
     fromCenterId: request.fulfillingCenterId,

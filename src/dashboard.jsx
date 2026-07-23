@@ -7,8 +7,11 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
-  doc
+  doc,
+  getDoc,
+  getDocs
 } from "firebase/firestore";
+import { calculateDistance, daysUntilExpiry, calculateRedistributionScore } from "./utils/distance";
 import { Bar } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -29,6 +32,52 @@ import { useNavigate, Link} from "react-router-dom";
 
 
 function Dashboard() {
+  const [suggestions, setSuggestions] = useState({});
+
+async function fetchSuggestions(medicineName, myCenterId) {
+  const myCenterDoc = await getDoc(doc(db, "centers", myCenterId));
+  const myCenter = myCenterDoc.data();
+
+  const invQuery = query(
+    collection(db, "inventory"),
+    where("medicineName", "==", medicineName)
+  );
+  const invSnapshot = await getDocs(invQuery);
+
+  const candidates = [];
+
+  for (const invDoc of invSnapshot.docs) {
+    const data = invDoc.data();
+    if (data.centerId === myCenterId) continue;
+    if (data.quantity <= data.lowStockThreshold) continue;
+
+    const centerDoc = await getDoc(doc(db, "centers", data.centerId));
+    if (!centerDoc.exists()) continue;
+    const centerData = centerDoc.data();
+
+    const distance = calculateDistance(
+      myCenter.latitude,
+      myCenter.longitude,
+      centerData.latitude,
+      centerData.longitude
+    );
+    const daysLeft = daysUntilExpiry(data.expiryDate);
+    const score = calculateRedistributionScore(distance, daysLeft);
+
+    candidates.push({
+      centerId: data.centerId,
+      centerName: centerData.name,
+      quantity: data.quantity,
+      distance: distance.toFixed(1),
+      daysLeft,
+      score
+    });
+  }
+
+  candidates.sort((a, b) => b.score - a.score);
+
+  setSuggestions((prev) => ({ ...prev, [medicineName]: candidates.slice(0, 3) }));
+}
   const { currentUser } = useAuth();
   const navigate = useNavigate();
 
@@ -197,8 +246,16 @@ function Dashboard() {
               <td>{m.lowStockThreshold}</td>
               <td>{m.expiryDate}</td>
               <td>
-                {m.quantity <= m.lowStockThreshold ? "Low Stock" : "In Stock"}
-              </td>
+  {m.quantity <= m.lowStockThreshold ? "Low Stock" : "In Stock"}
+
+  {m.quantity <= m.lowStockThreshold && (
+    <button
+      onClick={() => fetchSuggestions(m.medicineName, currentUser.uid)}
+    >
+      Show Suggestions
+    </button>
+  )}
+</td>
               <td>
                 <button onClick={() => handleEdit(m)}>Edit</button>
                 <button onClick={() => handleDelete(m.id)}>Delete</button>
@@ -207,8 +264,38 @@ function Dashboard() {
           ))}
         </tbody>
       </table>
+      {Object.keys(suggestions).map((medName) => (
+  <div key={medName}>
+    <h3>Suggestions for {medName}</h3>
+    {suggestions[medName].length === 0 ? (
+      <p>No surplus found at other centers.</p>
+    ) : (
+      <table border="1">
+        <thead>
+          <tr>
+            <th>Center</th>
+            <th>Distance (km)</th>
+            <th>Quantity Available</th>
+            <th>Expiry (days left)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {suggestions[medName].map((s, idx) => (
+            <tr key={idx}>
+              <td>{s.centerName}</td>
+              <td>{s.distance}</td>
+              <td>{s.quantity}</td>
+              <td>{s.daysLeft}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    )}
+  </div>
+))}
     </div>
   );
 }
+
 
 export default Dashboard;

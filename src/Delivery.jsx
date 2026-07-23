@@ -46,9 +46,16 @@ function Delivery() {
     const invSnapshot = await getDocs(invQuery);
     if (!invSnapshot.empty) {
       const fromInvDoc = invSnapshot.docs[0];
-      await updateDoc(doc(db, "inventory", fromInvDoc.id), {
-        quantity: increment(-delivery.quantity)
-      });
+const currentQty = fromInvDoc.data().quantity;
+
+if (delivery.quantity > currentQty) {
+  alert("Not enough stock available!");
+  return;
+}
+
+await updateDoc(doc(db, "inventory", fromInvDoc.id), {
+  quantity: increment(-delivery.quantity)
+});
     }
 
     const toInvQuery = query(
